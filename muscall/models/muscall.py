@@ -29,7 +29,7 @@ def weighted_loss(logits, sentence_sim, k=0.01):
 
     return loss
 
-
+# 誤差関数
 def clip_loss(similarity: torch.Tensor, sentence_sim=None, type_loss="clip") -> torch.Tensor:
     if sentence_sim is not None and type_loss == "weighted_clip":
         text_loss = weighted_loss(similarity, sentence_sim)

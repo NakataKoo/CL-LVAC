@@ -5,3 +5,6 @@ torchaudio==0.11.0
 einops==0.6.0
 simclr==1.0.2
 torch-audiomentations==0.11.0
+transformers
+numpy==1.22.4
+sentence_transformers
