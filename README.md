@@ -1,10 +1,3 @@
-<div  align="center">
-
-<p align="center">
-<img src="muscall.png" width="500">
-</p align="center">
-</div>
-
 ## Setup
 Create a fresh virtual environment:
 
