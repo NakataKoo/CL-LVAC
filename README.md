@@ -41,7 +41,7 @@ dataset_name
 
 An illustrative example of the dataset is provided in [`data/datasets/audiocaption/`](data/datasets/audiocaption/).
 
-## Training MusCALL
+## Training
 Dataset, model and training configurations are set in the respective `yaml` files in [`configs`](configs). You can also pass some options via the CLI, overwriting the arguments in the config files. For more details on the CLI options, please refer to the [training script](scripts/train.py).
 
 To train the model with the default configs, simply run
@@ -59,8 +59,8 @@ If you wish to resume training from a saved checkpoint, run this command:
 python train.py --experiment_id <model_id> 
 ```
 
-## Evaluating MusCALL
-Once trained, you can evaluate MusCALL on the cross-modal retrieval task:
+## Evaluating
+Once trained, you can evaluate Model on the cross-modal retrieval task:
 
 ```bash
 python evaluate.py <model_id> retrieval
@@ -78,3 +78,6 @@ python evaluate.py <model_id> zeroshot <dataset_name>
 ```
 
 You'll need to download the datasets inside the [`datasets/`](datasets/) folder and preprocess them before running the zeroshot evaluation.
+
+## Reference
+This repository is based on https://github.com/ilaria-manco/muscall
