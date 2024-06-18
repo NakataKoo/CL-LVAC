@@ -19,10 +19,10 @@ from muscall.utils.audio_utils import get_transform_chain
 class MusCALLTrainer(BaseTrainer):
     def __init__(self, config, logger):
         super().__init__(config, logger)
-        self.bert_config = self.config.model_config.bert
-        self.batch_size = self.config.training.dataloader.batch_size
+        self.bert_config = self.config.model_config.bert # 現状BERTに関する設定は無いのでself.bert_config = None
+        self.batch_size = self.config.training.dataloader.batch_size # training.yaml→dataloader→batch_size（バッチサイズ）
 
-        self.load()
+        self.load() # load_dataset()、build_model()、build_optimizer()、self.logger.save_config()の実行
 
         self.scaler = torch.cuda.amp.GradScaler()
 
@@ -31,11 +31,11 @@ class MusCALLTrainer(BaseTrainer):
 
     def load_dataset(self):
         self.logger.write("Loading dataset")
-        dataset_name = self.config.dataset_config.dataset_name
+        dataset_name = self.config.dataset_config.dataset_name # audiocaption.yaml→dataset_config→dataset_nameより、データセット名を取得
 
         if dataset_name == "audiocaption" or dataset_name == "musiccaps" or dataset_name == "musicbench":
-            self.train_dataset = AudioCaptionDataset(self.config.dataset_config)
-            self.val_dataset = AudioCaptionDataset(self.config.dataset_config, dataset_type="val")
+            self.train_dataset = AudioCaptionDataset(self.config.dataset_config, dataset_type="train") # AudioCaptionDatasetのインスタンスを生成（audiocaption.yamlの内容を引数に指定）
+            self.val_dataset = AudioCaptionDataset(self.config.dataset_config, dataset_type="val") # ほぼ同上（val専用）
         else:
             raise ValueError("{} dataset is not supported.".format(dataset_name))
 
@@ -52,18 +52,18 @@ class MusCALLTrainer(BaseTrainer):
 
         self.logger.write(
             "Number of training samples: {}".format(self.train_dataset.__len__())
-        )
+        ) # サンプル数をログに出力
 
     def build_model(self):
         self.logger.write("Building model")
-        model_name = self.config.model_config.model_name
+        model_name = self.config.model_config.model_name # muscall.yaml→model_config→model_nameより、モデル名を取得
 
         if model_name == "muscall":
             self.model = MusCALL(self.config.model_config)
         else:
             raise ValueError("{} model is not supported.".format(model_name))
 
-        self.print_parameters()
+        self.print_parameters() # 全学習パラメータ表示
 
         self.model.to(self.device)
 
@@ -107,8 +107,9 @@ class MusCALLTrainer(BaseTrainer):
         )
         return sentence_embeddings @ sentence_embeddings.t()
 
+    # train.pyによって実行されるメソッド
     def train(self):
-        best_r10 = 0
+        best_r10 = 0 # 最良のR@10スコアを追跡
 
         if os.path.exists(self.logger.checkpoint_path):
             self.logger.write(
@@ -116,8 +117,8 @@ class MusCALLTrainer(BaseTrainer):
                     self.logger.experiment_id
                 )
             )
-            self.load_ckp(self.logger.checkpoint_path)
-        else:
+            self.load_ckp(self.logger.checkpoint_path) # チェックポイントからの再開
+        else: # 学習の新規開始
             self.logger.write(
                 "Started training experiment with id {}".format(
                     self.logger.experiment_id
@@ -125,7 +126,7 @@ class MusCALLTrainer(BaseTrainer):
             )
             self.start_epoch = 0
 
-        for epoch in range(self.start_epoch, self.config.training.epochs):
+        for epoch in range(self.start_epoch, self.config.training.epochs): # start_epoch=0 ~ max epochs
             epoch_start_time = time.time()
 
             train_loss = self.train_epoch(self.train_loader, is_training=True)
@@ -133,7 +134,7 @@ class MusCALLTrainer(BaseTrainer):
 
             track_retrieval_metrics = True
             if track_retrieval_metrics:
-                r10 = self.get_retrieval_metrics()
+                r10 = self.get_retrieval_metrics() # 検索メトリクスの取得
 
             epoch_time = time.time() - epoch_start_time
             self.logger.update_training_log(
@@ -154,7 +155,7 @@ class MusCALLTrainer(BaseTrainer):
             is_best = r10 > best_r10
             if is_best:
                 best_r10 = r10
-            # save checkpoint in appropriate path (new or best)
+            # save checkpoint in appropriate path (new or best) (最良のモデルと最新のモデルを保存)
             self.logger.save_checkpoint(state=checkpoint, is_best=is_best)
 
     def load_ckp(self, checkpoint_path):
@@ -163,6 +164,7 @@ class MusCALLTrainer(BaseTrainer):
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         self.start_epoch = checkpoint["epoch"]
 
+    # 1エポック分の学習を実行（各バッチの損失計算＋バックプロパゲーション）
     def train_epoch(self, data_loader, is_training):
         running_loss = 0.0
         n_batches = 0
@@ -172,10 +174,12 @@ class MusCALLTrainer(BaseTrainer):
         else:
             self.model.eval()
 
+        # データローダーからバッチを取り出し、学習を実行
         for i, batch in enumerate(data_loader):
-            batch = tuple(t.to(device=self.device, non_blocking=True) for t in batch)
-            audio_id, input_audio, text_input_ids, _, _, data_idx = batch
+            batch = tuple(t.to(device=self.device, non_blocking=True) for t in batch) # data_loaderからバッチを取得し、GPUに転送
+            audio_id, input_audio, text_input_ids, _, _, data_idx = batch # バッチ内のデータを展開し、それぞれの変数に割り当て
 
+            # モデルの損失関数がweighted_clipの場合
             if self.config.model_config.loss == "weighted_clip":
                 sentence_sim = self.get_sentence_similarities(data_loader, data_idx)
             else:
@@ -183,26 +187,29 @@ class MusCALLTrainer(BaseTrainer):
 
             original_audio = None
             audio_data_config = self.config.dataset_config.audio
+            # 学習時、音声データの拡張が有効になっている場合、入力音声データ拡張
             if is_training and audio_data_config.augment:
                 original_audio = input_audio
-                augment_chain = get_transform_chain(
-                    p_polarity=0,
-                    p_gain=0,
-                    p_noise=audio_data_config.p_noise,
-                    p_pitch_shift=audio_data_config.p_pitch_shift,
-                    sample_rate=audio_data_config.sr,
-                )
+                augment_chain = get_transform_chain( # 一連のデータ拡張操作
+                    p_polarity=0, # 極性変換の確率
+                    p_gain=0,# 増幅の確率
+                    p_noise=audio_data_config.p_noise, # ノイズ追加の確率
+                    p_pitch_shift=audio_data_config.p_pitch_shift,# ピッチシフトの確率
+                    sample_rate=audio_data_config.sr, # サンプルレート（ここでは16,000 Hz）
+                ) 
                 input_audio = augment_chain(input_audio.unsqueeze(1), audio_data_config.sr).squeeze(1)
 
             # Cast operations to mixed precision
+            # 混合精度（AMP）を使用して損失を計算（順伝播forwardメソッド）
             with torch.cuda.amp.autocast(enabled=self.config.training.amp):
                 loss = self.model(
-                    input_audio,
-                    text_input_ids,
-                    original_audio=original_audio,
-                    sentence_sim=sentence_sim,
+                    input_audio, # 増強された音声データ
+                    text_input_ids, # トークナイズされたテキストデータのID
+                    original_audio=original_audio, # 元の音声データ（拡張前の音声データ）
+                    sentence_sim=sentence_sim,# 文の類似度（オプション：損失関数がweighted_clipの場合）
                 )
 
+            # 逆誤差伝播とパラメータ更新
             if is_training:
                 if self.config.training.amp:
                     self.scaler.scale(loss).backward()
@@ -221,8 +228,8 @@ class MusCALLTrainer(BaseTrainer):
                 self.scheduler.step()
                 self.optimizer.zero_grad()
 
-            running_loss += loss.item()
-            n_batches += 1
+            running_loss += loss.item() # 各バッチの損失を蓄積
+            n_batches += 1 # バッチ数をカウント
 
         return running_loss / n_batches
 

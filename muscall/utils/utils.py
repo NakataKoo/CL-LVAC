@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 import torch
 import torch.functional as F
 
-
+# YAML形式の設定ファイルを読み込み、環境設定 (env.base_dir) が未設定であれば、ルートディレクトリを設定してから、その設定オブジェクトを返す
 def load_conf(path_to_yaml):
     """Wrapper for configuration file loading through OmegaConf."""
     conf = OmegaConf.load(path_to_yaml)
@@ -17,6 +17,7 @@ def load_conf(path_to_yaml):
     return conf
 
 
+# 複数の設定ファイル（ベース設定、データセット設定、モデル設定）を読み込み、それらを1つの設定オブジェクトに統合
 def merge_conf(base_conf_path, dataset_conf_path, model_conf_path):
     """Wrapper for to merge multiple config files through OmegaConf."""
     base_conf = load_conf(base_conf_path)
@@ -34,6 +35,7 @@ def fix_seed(seed):
     torch.manual_seed(seed)
 
 
+# コマンドライン引数で指定されたパラメータを設定オブジェクトに反映させ、設定を動的に更新
 def update_conf_with_cli_params(params, config):
     params_dict = vars(params)
     for param in params_dict:
@@ -66,7 +68,7 @@ def save_json(output_path, content):
     with open(output_path, "w") as outfile:
         json.dump(content, outfile)
 
-
+# 現在のスクリプトの位置から2つ上のディレクトリの絶対パスを取得
 def get_root_dir():
     # TODO: below should be run only once, then saved
     root = os.path.dirname(os.path.abspath(__file__))

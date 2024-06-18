@@ -11,7 +11,7 @@ from torch_audiomentations import (
     PitchShift,
 )
 
-
+# データ拡張操作
 def get_transform_chain(
     p_polarity,
     p_noise,
@@ -20,10 +20,10 @@ def get_transform_chain(
     sample_rate,
 ):
     train_transforms = [
-        PolarityInversion(p=p_polarity),
-        AddColoredNoise(p=p_noise),
-        Gain(p=p_gain),
-        PitchShift(p=p_pitch_shift, sample_rate=sample_rate),
+        PolarityInversion(p=p_polarity), # 音声信号の極性を反転
+        AddColoredNoise(p=p_noise), # 音声信号にランダムなノイズを追加
+        Gain(p=p_gain), # 音声信号の振幅をランダムに変更（増幅または減衰）
+        PitchShift(p=p_pitch_shift, sample_rate=sample_rate), # 音声信号のピッチ（音の高さ）をランダムに変更
     ]
 
     transform_chain = Compose(transforms=train_transforms)

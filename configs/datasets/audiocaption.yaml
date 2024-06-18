@@ -4,7 +4,7 @@ dataset_config:
   # Caption configs
   text:
     max_seq_length: 77
-    tokenizer: cliptokenizer # one of berttokenizer, cliptokenizer
+    tokenizer: cliptokenizer # one of "berttokenizer", "cliptokenizer"
   audio:
     sr: 16000
     crop_length: 20

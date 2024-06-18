@@ -8,12 +8,12 @@ from muscall.modules.textual_heads import TextTransformer
 from muscall.modules.audio_ssl import SimCLRAudio
 from muscall.modules.audio_backbones import ModifiedResNet
 
-
+# クロスエントロピー誤差
 def contrastive_loss(logits: torch.Tensor) -> torch.Tensor:
     labels = torch.arange(len(logits), device=logits.device)
     return nn.functional.cross_entropy(logits, labels)
 
-
+# 文の類似度に基づいて重みを付けた対照損失
 def weighted_loss(logits, sentence_sim, k=0.01):
     batch_size = logits.size(0)
     mask = 1 - torch.eye(batch_size).to(device=logits.device)
@@ -43,8 +43,8 @@ def clip_loss(similarity: torch.Tensor, sentence_sim=None, type_loss="clip") -> 
 class MusCALL(nn.Module):
     def __init__(self, config):
         super().__init__()
-        audio_config = config.audio
-        text_config = config.text
+        audio_config = config.audio # 音声エンコーダの設定
+        text_config = config.text # テキストエンコーダの設定
 
         projection_dim = config.projection_dim
         audio_dim = audio_config.hidden_size
@@ -99,34 +99,61 @@ class MusCALL(nn.Module):
         text_features = self.text_projection(pooled_outout)
         return text_features
 
+    # 音声とテキストの特徴をエンコードし、対照学習のための損失を計算
     def forward(
         self,
-        audio,
-        text,
-        original_audio=None,
-        sentence_sim=None,
-        text_mask=None,
-        return_loss=True,
+        audio, # 拡張後の音声データ（バッチ）
+        text, # テキストデータ（バッチ）
+        original_audio=None, # 元音声データ
+        sentence_sim=None, # 文の類似度(オプション)
+        text_mask=None, #テキストのマスク(オプション)
+        return_loss=True, # 損失を計算して返すかどうかを指定するフラグ
     ):
+        """
+        以下のような__call__メソッドがオーバーロードされており、
+        モデルインスタンス(self.model(x, y, ...))を関数のように呼び出すと、
+        自動的にforwardメソッドを実行
+        
+        def __call__(self, *input, **kwargs):
+            return self.forward(*input, **kwargs)
+
+        従って、以下の2つの呼び出しは等価
+
+        # 直接 forward メソッドを呼び出す
+        loss = self.model.forward()
+
+        # 間接的に __call__ メソッドを介して forward メソッドを呼び出す
+        loss = self.model()
+
+        """
         if return_loss:
+            """
+            ・音声自己教師付き学習（SSL）の損失を計算
+            ・元の音声データと変換された音声データを比較し、同一性を学習
+            """
             audio_ssl_loss = (
                 self.audio_ssl(audio, original_audio) if self.do_audio_ssl else 0
             )
 
+        # 音声とテキストの特徴をそれぞれエンコード
         audio_features = self.encode_audio(audio)
         text_features = self.encode_text(text, text_mask)
 
-        # normalise features
+        # normalise features（各特徴ベクトルをそのノルムで割ることで、単位ベクトルに変換）
         audio_features = audio_features / audio_features.norm(dim=-1, keepdim=True)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
+        # ロジットの計算
+        # ロジットスケール（温度パラメータ）を計算。温度が未設定の場合、学習されたlogit_scaleを使用
         if self.temperature is None:
             logit_scale = self.logit_scale.exp()
+        # 音声とテキストの特徴ベクトルの内積を計算してロジットを得る
         else:
             logit_scale = 1.0 / self.temperature
         logits_per_audio = logit_scale * audio_features @ text_features.t()
         logits_per_text = logits_per_audio.t()
 
+        # マルチモーダル損失を計算
         if return_loss:
             multimodal_loss = clip_loss(
                 logits_per_text, sentence_sim, type_loss=self.type_loss

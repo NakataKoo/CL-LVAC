@@ -24,29 +24,31 @@ class AudioCaptionDataset(Dataset):
         self.config = config
         self._dataset_name = "audiocaption"
         self._dataset_type = dataset_type
-        self._data_dir = self.config.data_dir
+        self._data_dir = self.config.data_dir # ${env.data_root}/datasets/${dataset_config.dataset_name}
 
         self.dataset_json = os.path.join(
             self._data_dir, "dataset_{}.json".format(self._dataset_type)
-        )
+        ) # データセットのJSONファイル(root/data/dataset/○○/dataset_○○.json)のパス
 
-        self.max_seq_length = self.config.text.max_seq_length
-        self.sample_rate = self.config.audio.sr
-        self.num_samples = self.sample_rate * self.config.audio.crop_length
-        self.random_crop = self.config.audio.random_crop
+        self.max_seq_length = self.config.text.max_seq_length # 最大シーケンス長
+        self.sample_rate = self.config.audio.sr # サンプリングレート
+        self.num_samples = self.sample_rate * self.config.audio.crop_length # クロップ長
+        self.random_crop = self.config.audio.random_crop # ランダムクロップの有無
         self._build_tokenizer()
         self._load()
 
+    # JSONファイルからデータを読み込み、音声ID、キャプション、音声パスをリストに格納
     def _load(self):
         with open(self.dataset_json) as f:
-            self.samples = json.load(f)
-            self.audio_dir = os.path.join(self._data_dir, "audio")
+            self.samples = json.load(f) # jsonをPythonオブジェクトとして読み込み
+            self.audio_dir = os.path.join(self._data_dir, "audio") # ${env.data_root}/datasets/${dataset_config.dataset_name}/audio
 
-            self.audio_ids = [i["audio_id"] for i in self.samples]
-            self.captions = [i["caption"].strip() for i in self.samples]
+            self.audio_ids = [i["audio_id"] for i in self.samples] # jsonの各オブジェくトの"audio_id"をリストに格納
+            self.captions = [i["caption"].strip() for i in self.samples] # jsonの各オブジェくトの"caption"をリストに格納
             self.audio_paths = [os.path.join(
-                self.audio_dir, i["audio_path"]) for i in self.samples]
+                self.audio_dir, i["audio_path"]) for i in self.samples] # jsonの各オブジェくトの"audio_path"をリストに格納
 
+    # トークナイザの構築
     def _build_tokenizer(self):
         # using tolenizers from pretrained models to reuse their vocab
         if self.config.text.tokenizer == "berttokenizer":
@@ -67,6 +69,8 @@ class AudioCaptionDataset(Dataset):
 
         return self.captions[idx]
 
+    ''' もともとの方
+    # 音声データをクロップ(学習の場合はランダムクロップ、検証およびテストの場合は中央クロップ)
     def _crop_audio(self, mmapped_array):
         if np.shape(mmapped_array)[0] == 2:
             audio_length = np.shape(mmapped_array)[1]
@@ -85,7 +89,7 @@ class AudioCaptionDataset(Dataset):
                 # start_index = 0
             end_index = start_index + self.num_samples
 
-        # downmix to mono if # of channels = 2
+        # downmix to mono if # of channels = 2（ステレオ音声の場合はモノラルにダウンズミックス）
         if np.shape(mmapped_array)[0] == 2:
             audio = (
                 mmapped_array[:, start_index:end_index].astype("float32").mean(axis=0)
@@ -93,8 +97,9 @@ class AudioCaptionDataset(Dataset):
         else:
             audio = mmapped_array[start_index:end_index].astype("float32")
         return audio
+    '''
 
-    # 改良
+    # 改良（音声データを読み込み、クロップし、テンソルに変換）
     def get_audio(self, idx):
         try:
             mmapped_array = np.load(self.audio_paths[idx], mmap_mode="r")
@@ -103,6 +108,7 @@ class AudioCaptionDataset(Dataset):
 
         audio = torch.tensor(self._crop_audio(mmapped_array), dtype=torch.float)
 
+        #音声が短い場合はゼロパディングし、長い場合はトリミング
         # zero pad short audio
         if len(audio.shape) == 2:
             # Convert stereo to mono by averaging the channels
@@ -140,6 +146,7 @@ class AudioCaptionDataset(Dataset):
 
         return audio
 
+    # キャプションをトークナイズし、シーケンスIDに変換
     def get_input_ids(self, idx):
         """
         Converts a string to a sequence of ids (integer), using the tokenizer and vocabulary.
@@ -155,6 +162,7 @@ class AudioCaptionDataset(Dataset):
         )
         return input_ids
 
+    # トークナイズしたキャプションをモデル入力用のテンソルに変換し、パディングを行う
     def get_text_input(self, idx):
         """Build text model input."""
         input_ids = self.get_input_ids(idx)

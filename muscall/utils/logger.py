@@ -4,6 +4,7 @@ import time
 from omegaconf import OmegaConf
 
 
+# 実験のログを管理し、実験設定やモデルのチェックポイントを保存
 class Logger:
     def __init__(self, config):
         self.config = config
@@ -13,25 +14,25 @@ class Logger:
 
     def init_pretrain_logger(self):
         if self.config.env.experiment_id is None:
-            self.experiment_id = self.get_timestamp()
+            self.experiment_id = self.get_timestamp() # 現在時刻を実験idとする
             OmegaConf.update(self.config, "env.experiment_id",
                              self.experiment_id)
         else:
             self.experiment_id = self.config.env.experiment_id
+        
         self.experiment_dir = os.path.join(self.config.env.experiments_dir,
-                                           self.experiment_id)
-
+                                           self.experiment_id) # 実験結果を保存するディレクトリ
         self.checkpoint_path = os.path.join(
-            self.experiment_dir, 'checkpoint.pth.tar')
+            self.experiment_dir, 'checkpoint.pth.tar') # チェックポイントの保存先
 
     def init_training_log(self):
         self.log_filename = os.path.join(self.experiment_dir, "train_log.tsv")
         if not os.path.exists(self.experiment_dir):
             os.makedirs(self.experiment_dir)
-            log_file = open(self.log_filename, 'a')
+            log_file = open(self.log_filename, 'a') # train_log.tsv ファイルを追記モード ('a') で開く
             log_file.write(
                 'Epoch\ttrain_loss\tval_loss\tmetric\tepoch_time\tlearing_rate\ttime_stamp\n'
-            )
+            ) # ログファイルのヘッダーを書き込む（ヘッダーには、エポック、トレーニング損失、検証損失、メトリック、エポック時間、学習率、タイムスタンプが含まれる）
             log_file.close()
 
     def save_config(self):
@@ -46,6 +47,7 @@ class Logger:
     def write(self, text):
         print(text)
 
+    # トレーニングの進行状況をログファイルtrain_log.tsvに記録
     def update_training_log(self, epoch, train_loss, val_loss, epoch_time,
                             learning_rate, metric=0):
         time_stamp = str(time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()))
@@ -60,6 +62,7 @@ class Logger:
                         time_stamp))
         log_file.close()
 
+    # モデルの状態をディスクに保存し、必要に応じて最良のモデルも別途保存
     def save_checkpoint(self, state, is_best=False):
         torch.save(state, self.checkpoint_path)
         if is_best:

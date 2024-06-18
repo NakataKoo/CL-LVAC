@@ -27,7 +27,7 @@ def parse_args():
         "--config_path",
         type=str,
         help="path to base config file",
-        default=os.path.join(get_root_dir(), "configs", "training.yaml"),
+        default=os.path.join(get_root_dir(), "configs", "training.yaml"), # デフォルトではtraining.yamlを読み込む
     )
     parser.add_argument(
         "--dataset", type=str, help="name of the dataset", default="audiocaption"
@@ -44,17 +44,17 @@ if __name__ == "__main__":
 
     if params.experiment_id is None:
         # 1. Load config (base + dataset + model)
-        base_conf = load_conf(params.config_path)
+        base_conf = load_conf(params.config_path) # デフォルトではtraining.yamlを読み込む
 
         if params.dataset == "audiocaption":
-            dataset_conf_path = os.path.join(base_conf.env.base_dir, AudioCaptionDataset.config_path())
+            dataset_conf_path = os.path.join(base_conf.env.base_dir, AudioCaptionDataset.config_path()) # "configs/datasets/audiocaption.yaml"のパスを取得
         else:
             raise ValueError("{} dataset not supported".format(params.dataset))
 
-        model_conf_path = os.path.join(base_conf.env.base_dir, MusCALL.config_path())
+        model_conf_path = os.path.join(base_conf.env.base_dir, MusCALL.config_path()) # "configs/models/muscall.yaml"のパスを取得
 
-        config = merge_conf(params.config_path, dataset_conf_path, model_conf_path)
-        update_conf_with_cli_params(params, config)
+        config = merge_conf(params.config_path, dataset_conf_path, model_conf_path) # 「config＝training設定＋データセット設定＋モデル設定」(config.yamlが学習設定ファイルとして保存される)
+        update_conf_with_cli_params(params, config) # 引数の値をconfigに反映
     else:
         config = OmegaConf.load(
             "./save/experiments/{}/config.yaml".format(params.experiment_id)
@@ -64,6 +64,6 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = params.device_num
 
     trainer = MusCALLTrainer(config, logger)
-    print("# of trainable parameters:", trainer.count_parameters())
+    print("# of trainable parameters:", trainer.count_parameters()) # 学習パラメータ数の表示
 
-    trainer.train()
+    trainer.train() # モデル学習開始
